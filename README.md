@@ -51,6 +51,11 @@ type World struct {
 	Fish string `json:"fish,omitempty" validate:"required"`
 }
 
+func GetWord(hello *Hello) (*World, error) {
+	return nil, nil
+}
+
+
 func main(){
   	go2ts.New().AddApi("POST", "/v1/world", GetWord).Write("apis.ts")
 }
