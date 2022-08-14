@@ -246,10 +246,10 @@ func (t *Go2ts) formatStruct(ty reflect.Type) string {
 		endFn = func() {
 			out += fmt.Sprintf("%sexport type %s = arr_%s[]", rn, name, name)
 		}
-		// return fmt.Sprintf(`export type %s = any[]%s`, sliceName(ty), rn)
 	}
 	if ty.Kind() == reflect.Pointer {
 		ty = ty.Elem()
+		out = fmt.Sprintf(`export interface %s {%s`, ty.Name(), rn)
 	}
 	subTypes := []reflect.Type{}
 
