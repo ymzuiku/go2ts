@@ -37,6 +37,7 @@ func (t *Go2ts) Add(v any) *Go2ts {
 	t.values[ty] = v
 	return t
 }
+
 func (t *Go2ts) AddApi(method, url string, v any) *Go2ts {
 	ty := reflect.TypeOf(v)
 	t.types = append(t.types, ty)
@@ -48,12 +49,18 @@ func (t *Go2ts) AddApi(method, url string, v any) *Go2ts {
 	return t
 }
 
+var all = ""
+
 func (t *Go2ts) Format_all() string {
+	if all != "" {
+		return all
+	}
 	out := "// Auto create with go2ts" + rn
 	out += "/* eslint-disable */" + rn
 	for _, v := range t.types {
 		out += rn + t.formatStruct(v)
 	}
+	all = out
 	return out
 }
 
@@ -71,7 +78,7 @@ func (t *Go2ts) Write(filePath string) *Go2ts {
 		}
 	}
 
-	if err := os.WriteFile(filePath, []byte(codes), 0777); err != nil {
+	if err := os.WriteFile(filePath, []byte(codes), 0o777); err != nil {
 		panic(err)
 	}
 	return t
@@ -94,6 +101,7 @@ func fixFuncType(subTypes []reflect.Type, input reflect.Type) ([]reflect.Type, s
 
 func fixStructType(subTypes []reflect.Type, field reflect.StructField) ([]reflect.Type, string) {
 	typeStr := field.Type.String()
+	// typeStr := strings.ReplaceAll(strings.ReplaceAll(field.Type.String(), "[]", ""), ".", "")
 	relType := typeMap[typeStr]
 	tsType := field.Tag.Get("ts_type")
 	if tsType != "" {
@@ -121,7 +129,6 @@ func fixStructType(subTypes []reflect.Type, field reflect.StructField) ([]reflec
 		} else {
 			relType = "any"
 		}
-
 	}
 
 	return subTypes, relType
@@ -224,21 +231,32 @@ func (t *Go2ts) formatStruct(ty reflect.Type) string {
 		return ""
 	}
 	t.makedTypes[tyStr] = true
+	out := fmt.Sprintf(`export interface %s {%s`, ty.Name(), rn)
+	endFn := func() {}
 	if ty.Kind() == reflect.Func {
 		if api, ok := t.apis[ty]; ok {
 			return t.formatApi(api, ty)
 		}
 		return t.formatFunc(ty)
 	}
+	if ty.Kind() == reflect.Slice {
+		ty = ty.Elem()
+		name := ty.Name()
+		out = fmt.Sprintf(`interface arr_%s {%s`, name, rn)
+		endFn = func() {
+			out += fmt.Sprintf("%sexport type %s = arr_%s[]", rn, name, name)
+		}
+		// return fmt.Sprintf(`export type %s = any[]%s`, sliceName(ty), rn)
+	}
 	if ty.Kind() == reflect.Pointer {
 		ty = ty.Elem()
 	}
 	subTypes := []reflect.Type{}
-	out := fmt.Sprintf(`export interface %s {%s`, ty.Name(), rn)
 
 	var parse func(reflect.Type, map[string]bool) string
 	parse = func(ty reflect.Type, appended map[string]bool) string {
 		out := ""
+
 		for i := 0; i < ty.NumField(); i++ {
 			field := ty.Field(i)
 			jsonStr := field.Tag.Get("json")
@@ -267,6 +285,7 @@ func (t *Go2ts) formatStruct(ty reflect.Type) string {
 				out += fmt.Sprintf(`  %s%s: %s; %s`, key, opt, relType, rn)
 			}
 		}
+
 		return out
 	}
 
@@ -276,6 +295,6 @@ func (t *Go2ts) formatStruct(ty reflect.Type) string {
 	for _, ty := range subTypes {
 		out += rn + t.formatStruct(ty)
 	}
-
+	endFn()
 	return out
 }
